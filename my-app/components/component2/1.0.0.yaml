@@ -1,0 +1,56 @@
+Name: component2
+Version: 1.0.0
+Platform: Linux
+Description: 'Custom component for Docker and container tools installation'
+Data: |
+  name: Component2 - Docker Installation
+  description: This component installs Docker and container-related tools
+  schemaVersion: 1.0
+  
+  phases:
+    - name: build
+      steps:
+        - name: InstallDocker
+          action: ExecuteBash
+          inputs:
+            commands:
+              - echo "Starting Component2 (Docker) installation..."
+              - yum update -y
+              - yum install -y docker
+              - systemctl enable docker
+              - systemctl start docker
+              - usermod -a -G docker ec2-user
+              - echo "Docker installation completed"
+        
+        - name: InstallDockerCompose
+          action: ExecuteBash
+          inputs:
+            commands:
+              - echo "Installing Docker Compose..."
+              - curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              - chmod +x /usr/local/bin/docker-compose
+              - ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+              - echo "Docker Compose installation completed"
+        
+        - name: ConfigureDockerEnvironment
+          action: ExecuteBash
+          inputs:
+            commands:
+              - echo "Configuring Docker environment..."
+              - echo 'export COMPONENT2_VERSION=1.0.0' >> /etc/environment
+              - echo 'export DOCKER_INSTALLED=true' >> /etc/environment
+              - mkdir -p /etc/docker
+              - echo '{"log-driver": "json-file", "log-opts": {"max-size": "10m", "max-file": "3"}}' > /etc/docker/daemon.json
+              - echo "Docker environment configured"
+    
+    - name: validate
+      steps:
+        - name: ValidateDockerInstallation
+          action: ExecuteBash
+          inputs:
+            commands:
+              - echo "Validating Component2 (Docker) installation..."
+              - docker --version
+              - docker-compose --version
+              - systemctl status docker --no-pager
+              - echo "Component2 validation completed"
