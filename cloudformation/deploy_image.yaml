@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Image Builder example with Component, Recipe, Infrastructure, and Pipeline
+
+Resources:
+  MyUpdateComponent:
+    Type: AWS::ImageBuilder::Component
+    Properties:
+      Name: "MyUpdateComponent"
+      Platform: "Linux"
+      Version: "1.0.0"
+      Description: "Run apt update and upgrade"
+      Data: |
+        name: update-packages
+        description: Updates all packages
+        schemaVersion: 1.0
+        phases:
+          build:
+            commands:
+              - apt-get update
+              - apt-get upgrade -y
+
+  MyImageRecipe:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties:
+      Name: "MyImageRecipe"
+      Version: "1.0.0"
+      ParentImage: "arn:aws:imagebuilder:us-east-1:aws:image/amazon-linux-2023-x86/x.x.x"
+      Components:
+        - ComponentArn: !Ref MyUpdateComponent
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+
+  MyInfrastructureConfig:
+    Type: AWS::ImageBuilder::InfrastructureConfiguration
+    Properties:
+      Name: "MyInfraConfig"
+      InstanceTypes:
+        - "t3.medium"
+      InstanceProfileName: !Ref InstanceProfileName
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      SubnetId: !Ref SubnetId
+      TerminateInstanceOnFailure: true
+
+  MyImagePipeline:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties:
+      Name: "MyImagePipeline"
+      ImageRecipeArn: !Ref MyImageRecipe
+      InfrastructureConfigurationArn: !Ref MyInfrastructureConfig
+      Schedule:
+        ScheduleExpression: "cron(0 0 * * ? *)"
+        PipelineExecutionStartCondition: "EXPRESSION_MATCH_ONLY"
+      Status: "ENABLED"
+
+Parameters:
+  InstanceProfileName:
+    Type: String
+    Description: EC2 instance profile with Image Builder permissions
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group for Image Builder instance
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for Image Builder instance
+
+Outputs:
+  PipelineArn:
+    Value: !Ref MyImagePipeline
+    Description: The ARN of the created image pipeline
