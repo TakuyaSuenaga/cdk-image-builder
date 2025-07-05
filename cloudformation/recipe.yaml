@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  ComponentArn:
+    Type: String
+Resources:
+  MyImageRecipe:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties:
+      Name: "MyImageRecipe"
+      Version: "1.0.0"
+      ParentImage: "arn:aws:imagebuilder:us-east-1:aws:image/amazon-linux-2023-x86/latest"
+      Components:
+        - ComponentArn: !Ref ComponentArn
+Outputs:
+  ImageRecipeArn:
+    Value: !Ref MyImageRecipe

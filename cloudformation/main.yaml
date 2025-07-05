@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  ComponentStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://s3.amazonaws.com/my-bucket/component.yaml"
+
+  RecipeStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://s3.amazonaws.com/my-bucket/recipe.yaml"
+      Parameters:
+        ComponentArn: !GetAtt ComponentStack.Outputs.ComponentArn
+
+  MyInfraConfig:
+    Type: AWS::ImageBuilder::InfrastructureConfiguration
+    Properties:
+      Name: "MyInfraConfig"
+      InstanceProfileName: !Ref InstanceProfileName
+      InstanceTypes:
+        - "t3.medium"
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      SubnetId: !Ref SubnetId
+
+  MyImagePipeline:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties:
+      Name: "MyImagePipeline"
+      ImageRecipeArn: !GetAtt RecipeStack.Outputs.ImageRecipeArn
+      InfrastructureConfigurationArn: !Ref MyInfraConfig
+      Status: "ENABLED"
+
+Parameters:
+  InstanceProfileName:
+    Type: String
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id

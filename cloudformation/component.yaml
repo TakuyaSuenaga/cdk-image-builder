@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  MyUpdateComponent:
+    Type: AWS::ImageBuilder::Component
+    Properties:
+      Name: "MyUpdateComponent"
+      Platform: "Linux"
+      Version: "1.0.0"
+      Description: "Run apt update and upgrade"
+      Data: |
+        name: update-packages
+        description: Updates packages
+        schemaVersion: 1.0
+        phases:
+          build:
+            commands:
+              - apt-get update
+              - apt-get upgrade -y
+Outputs:
+  ComponentArn:
+    Value: !Ref MyUpdateComponent
