@@ -44,18 +44,10 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install aws-cdk-lib constructs boto3 pyyaml
+        pip install -r cdk-deploy/requirements.txt
 
     - name: Install CDK
       run: npm install -g aws-cdk
-
-    - name: Deploy Image Builder Pipeline
-      run: |
-        cd cdk-deploy
-        python cdk_deploy.py
-      env:
-        RECIPE_VERSION: ${{ github.event.inputs.recipe_version || 'latest' }}
-        GITHUB_SHA: ${{ github.sha }}
 
     - name: CDK Bootstrap (if needed)
       run: |
@@ -67,3 +59,6 @@ jobs:
       run: |
         cd cdk-deploy
         cdk deploy --require-approval never
+      env:
+        RECIPE_VERSION: ${{ github.event.inputs.recipe_version || 'latest' }}
+        GITHUB_SHA: ${{ github.sha }}
