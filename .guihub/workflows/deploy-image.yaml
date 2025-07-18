@@ -10,11 +10,11 @@ on:
   #   paths:
   #     - 'my-app/**'
   workflow_dispatch:
-    inputs:
-      recipe_version:
-        description: 'Recipe version to deploy'
-        required: false
-        default: 'latest'
+    # inputs:
+    #   recipe_version:
+    #     description: 'Recipe version to deploy'
+    #     required: false
+    #     default: 'latest'
 
 env:
   AWS_REGION: ap-northeast-1
