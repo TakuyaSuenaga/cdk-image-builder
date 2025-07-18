@@ -247,11 +247,11 @@ class ImageBuilderStack(Stack):
             instance_types=["t3.medium"],
             subnet_id=vpc.public_subnets[0].subnet_id,
             terminate_instance_on_failure=True,
-            logging=imagebuilder.CfnInfrastructureConfiguration.LoggingProperty(
-                cloud_watch_logs=imagebuilder.CfnInfrastructureConfiguration.CloudWatchLogsProperty(
-                    log_group_name=log_group.log_group_name
-                )
-            )
+            # logging=imagebuilder.CfnInfrastructureConfiguration.LoggingProperty(
+            #     cloud_watch_logs=imagebuilder.CfnInfrastructureConfiguration.CloudWatchLogsProperty(
+            #         log_group_name=log_group.log_group_name
+            #     )
+            # )
         )
     
     def _create_distribution_config(self) -> imagebuilder.CfnDistributionConfiguration:
