@@ -1,14 +1,14 @@
 name: Deploy AWS Image Builder
 
 on:
-  # push:
-  #   branches: [ main ]
-  #   paths:
-  #     - 'my-app/**'
-  # pull_request:
-  #   branches: [ main ]
-  #   paths:
-  #     - 'my-app/**'
+  push:
+    branches: [ main ]
+    # paths:
+    #   - 'my-app/**'
+  pull_request:
+    branches: [ main ]
+    # paths:
+    #   - 'my-app/**'
   workflow_dispatch:
     # inputs:
     #   recipe_version:
