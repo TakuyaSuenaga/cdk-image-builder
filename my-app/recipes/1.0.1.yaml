@@ -1,0 +1,17 @@
+Name: image-builder-test
+Version: 1.0.1
+ParentImage:
+  Name: amazon-linux-2-x86
+  Version: x.x.x
+Components:
+  - component1:
+      Version: x.x.x
+  - component2:
+      Version: x.x.x
+BlockDeviceMappings:
+  - DeviceName: /dev/xvda
+    Ebs:
+      DeleteOnTermination: true
+      VolumeSize: 20
+      VolumeType: gp3
+      Encrypted: false
