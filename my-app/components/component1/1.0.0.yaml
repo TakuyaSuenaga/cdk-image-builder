@@ -3,40 +3,31 @@ Version: 1.0.0
 Platform: Linux
 Description: 'Custom component for installing and configuring basic tools'
 Data: |
-  name: Component1 - Basic Tools Installation
-  description: This component installs basic development tools and utilities
+  name: component1
+  description: This is hello world build document.
   schemaVersion: 1.0
-  
+
   phases:
     - name: build
       steps:
-        - name: UpdatePackages
-          action: UpdateOS
-        
-        - name: InstallBasicTools
+        - name: component1
           action: ExecuteBash
           inputs:
             commands:
-              - echo "Starting Component1 installation..."
-              - yum update -y
-              - yum install -y git curl wget vim htop tree
-              - echo "Component1 installation completed successfully"
-        
-        - name: ConfigureEnvironment
-          action: ExecuteBash
-          inputs:
-            commands:
-              - echo "Configuring environment for Component1..."
-              - echo 'export COMPONENT1_VERSION=1.0.0' >> /etc/environment
-              - echo "Component1 environment configured"
-    
+              - echo "component1! Build."
+
     - name: validate
       steps:
-        - name: ValidateInstallation
+        - name: component1
           action: ExecuteBash
           inputs:
             commands:
-              - echo "Validating Component1 installation..."
-              - git --version
-              - curl --version
-              - echo "Component1 validation completed"
+              - echo "component1! Validate."
+
+    - name: test
+      steps:
+        - name: component1
+          action: ExecuteBash
+          inputs:
+            commands:
+              - echo "component1! Test."

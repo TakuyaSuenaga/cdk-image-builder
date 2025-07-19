@@ -49,11 +49,11 @@ jobs:
     - name: Install CDK
       run: npm install -g aws-cdk
 
-    - name: CDK Bootstrap (if needed)
-      run: |
-        cd cdk-deploy
-        cdk bootstrap --require-approval never
-      continue-on-error: true
+    # - name: CDK Bootstrap (if needed)
+    #   run: |
+    #     cd cdk-deploy
+    #     cdk bootstrap --require-approval never
+    #   continue-on-error: true
 
     - name: CDK Deploy
       run: |
