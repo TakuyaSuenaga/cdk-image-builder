@@ -248,7 +248,7 @@ class ImageBuilderStack(Stack):
             subnet_id=vpc.public_subnets[0].subnet_id,
             security_group_ids=[
                 "sg-0a43fd22ebc3702be",
-            ]
+            ],
             terminate_instance_on_failure=True,
             # logging=imagebuilder.CfnInfrastructureConfiguration.LoggingProperty(
             #     cloud_watch_logs=imagebuilder.CfnInfrastructureConfiguration.CloudWatchLogsProperty(
