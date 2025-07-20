@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import sys
 import yaml
@@ -17,6 +16,24 @@ from aws_cdk import (
     CfnOutput
 )
 from constructs import Construct
+
+# boto3で既存リソースのARNを保持するためのヘルパークラス
+class ExistingImageBuilderComponent:
+    def __init__(self, arn: str):
+        self._arn = arn
+    
+    @property
+    def attr_arn(self):
+        return self._arn
+
+class ExistingImageBuilderRecipe:
+    def __init__(self, arn: str):
+        self._arn = arn
+    
+    @property
+    def attr_arn(self):
+        return self._arn
+
 
 class ImageBuilderManager:
     """レシピとコンポーネントファイルの管理クラス"""
@@ -119,6 +136,9 @@ class ImageBuilderStack(Stack):
         self.recipe_data = recipe_data
         self.components_data = components_data
         
+        # boto3 Imagebuilder クライアントを初期化
+        self.imagebuilder_client = boto3.client('imagebuilder', region_name=self.region)
+        
         # IAM Role for Image Builder
         self.image_builder_role = self._create_image_builder_role()
         
@@ -176,29 +196,101 @@ class ImageBuilderStack(Stack):
             roles=[self.image_builder_role.role_name]
         )
     
-    def _create_components(self) -> Dict[str, imagebuilder.CfnComponent]:
-        """コンポーネントを作成"""
+    def _get_existing_component_arn(self, name: str, version: str) -> Optional[str]:
+        """
+        指定された名前とバージョンの既存コンポーネントのARNを取得する。
+        見つからない場合はNoneを返す。
+        """
+        try:
+            # list_components API でフィルタリング
+            response = self.imagebuilder_client.list_components(
+                filters=[
+                    {'name': 'name', 'values': [name]},
+                    {'name': 'version', 'values': [version]}
+                ]
+            )
+            
+            print("componentList:")
+            print(response.get('componentList', []))
+            # ページネーションを考慮し、正確に一致するものを探す
+            for component_summary in response.get('componentList', []):
+                if component_summary['name'] == name and component_summary['version'] == version:
+                    return component_summary['arn']
+            return None
+            
+        except Exception as e:
+            # エラー処理。権限がない場合など
+            print(f"Warning: Could not list Image Builder components. Error: {e}", file=sys.stderr)
+            return None
+
+    def _get_existing_recipe_arn(self, name: str, version: str) -> Optional[str]:
+        """
+        指定された名前とバージョンの既存レシピのARNを取得する。
+        見つからない場合はNoneを返す。
+        """
+        try:
+            # 名前でフィルタリングし、全バージョンを取得
+            paginator = self.imagebuilder_client.get_paginator('list_image_recipes')
+            # 'name' フィルターは使用可能
+            response_iterator = paginator.paginate(
+                filters=[{'name': 'name', 'values': [name]}]
+            )
+            
+            for page in response_iterator:
+                print("imageRecipeList:")
+                print(page.get('imageRecipeList', []))
+                for recipe_summary in page.get('imageRecipeList', []):
+                    # Pythonコード内でバージョンを比較
+                    if recipe_summary['name'] == name and recipe_summary['version'] == version:
+                        return recipe_summary['arn']
+            return None
+            
+        except Exception as e:
+            print(f"Warning: Could not list Image Builder recipes. Error: {e}", file=sys.stderr)
+            return None
+            
+    def _create_components(self) -> Dict[str, Any]: # 戻り値の型を CfnComponent から Any に変更
+        """コンポーネントを作成（既存の場合は参照）"""
         components = {}
         
         for component_name, component_data in self.components_data.items():
-            component = imagebuilder.CfnComponent(
-                self, f"Component{component_name}",
-                name=component_data['Name'],
-                platform=component_data['Platform'],
-                version=component_data['Version'],
-                data=component_data['Data']
-            )
-            components[component_name] = component
+            version = component_data['Version']
+            existing_arn = self._get_existing_component_arn(component_name, version)
+            
+            if existing_arn:
+                print(f"Component '{component_name}' v{version}' already exists. Using ARN: {existing_arn}")
+                # 既存のARNを使用するダミーオブジェクトを作成
+                components[component_name] = ExistingImageBuilderComponent(existing_arn)
+            else:
+                print(f"Creating new Component '{component_name}' v{version}'...")
+                component = imagebuilder.CfnComponent(
+                    self, f"Component{component_name}",
+                    name=component_data['Name'],
+                    platform=component_data['Platform'],
+                    version=component_data['Version'],
+                    data=component_data['Data']
+                )
+                components[component_name] = component
         
         return components
     
-    def _create_recipe(self) -> imagebuilder.CfnImageRecipe:
-        """レシピを作成"""
+    def _create_recipe(self) -> Any: # 戻り値の型を CfnImageRecipe から Any に変更
+        """レシピを作成（既存の場合は参照）"""
+        recipe_name = self.recipe_data['Name']
+        recipe_version = self.recipe_data['Version']
+        existing_arn = self._get_existing_recipe_arn(recipe_name, recipe_version)
+
+        if existing_arn:
+            print(f"Image Recipe '{recipe_name}' v{recipe_version}' already exists. Using ARN: {existing_arn}")
+            return ExistingImageBuilderRecipe(existing_arn) # self.recipe に直接設定
+
+        print(f"Creating new Image Recipe '{recipe_name}' v{recipe_version}'...")
         # コンポーネント参照を構築
         component_refs = []
         for component_config in self.recipe_data['Components']:
             for component_name, component_info in component_config.items():
                 if component_name in self.components:
+                    # ここで self.components[component_name] が ExistingImageBuilderComponent か CfnComponent のどちらかになる
                     component_refs.append(
                         imagebuilder.CfnImageRecipe.ComponentConfigurationProperty(
                             component_arn=self.components[component_name].attr_arn
@@ -214,8 +306,8 @@ class ImageBuilderStack(Stack):
                     device_name=mapping['DeviceName'],
                     ebs=imagebuilder.CfnImageRecipe.EbsInstanceBlockDeviceSpecificationProperty(
                         delete_on_termination=ebs_config.get('DeleteOnTermination', True),
-                        volume_size=ebs_config.get('VolumeSize', 20),
-                        volume_type=ebs_config.get('VolumeType', 'gp3')
+                        volume_size=ebs_config.get('VolumeSize', 20), # 修正: VolumeSizeはint
+                        volume_type=ebs_config.get('VolumeType', 'gp3') # 修正: VolumeTypeはstr
                     )
                 )
             )
@@ -247,7 +339,7 @@ class ImageBuilderStack(Stack):
             instance_types=["t3.medium"],
             subnet_id=vpc.public_subnets[0].subnet_id,
             security_group_ids=[
-                "sg-0a43fd22ebc3702be",
+                "sg-0a43fd22ebc3702be", # このSGがImage Builderインスタンスからの必要な通信を許可しているか確認
             ],
             terminate_instance_on_failure=True,
             # logging=imagebuilder.CfnInfrastructureConfiguration.LoggingProperty(
@@ -278,7 +370,7 @@ class ImageBuilderStack(Stack):
         return imagebuilder.CfnImagePipeline(
             self, "ImagePipeline",
             name=f"{self.recipe_data['Name']}-pipeline",
-            image_recipe_arn=self.recipe.attr_arn,
+            image_recipe_arn=self.recipe.attr_arn, # ここで self.recipe が ExistingImageBuilderRecipe か CfnImageRecipe のどちらかになる
             infrastructure_configuration_arn=self.infrastructure_config.attr_arn,
             distribution_configuration_arn=self.distribution_config.attr_arn,
             status="ENABLED"
@@ -286,17 +378,29 @@ class ImageBuilderStack(Stack):
     
     def _create_outputs(self):
         """スタックの出力を作成"""
-        CfnOutput(
-            self, "ImagePipelineArn",
-            value=self.image_pipeline.attr_arn,
-            description="Image Builder Pipeline ARN"
-        )
+        # ImagePipelineArn は CfnImagePipeline を作成した場合のみ出力
+        if isinstance(self.image_pipeline, imagebuilder.CfnImagePipeline):
+            CfnOutput(
+                self, "ImagePipelineArn",
+                value=self.image_pipeline.attr_arn,
+                description="Image Builder Pipeline ARN"
+            )
+        # else:
+        #     # ImagePipeline が既存の場合は ARN を取得する方法がないため、CfnOutput は出さないのが一般的
+        #     # もし必要なら別の方法で ARN を取得して出力
         
-        CfnOutput(
-            self, "ImageRecipeArn",
-            value=self.recipe.attr_arn,
-            description="Image Recipe ARN"
-        )
+        if isinstance(self.recipe, imagebuilder.CfnImageRecipe):
+            CfnOutput(
+                self, "ImageRecipeArn",
+                value=self.recipe.attr_arn,
+                description="Image Recipe ARN"
+            )
+        else: # ExistingImageBuilderRecipe の場合は attr_arn を利用
+             CfnOutput(
+                self, "ImageRecipeArn",
+                value=self.recipe.attr_arn, 
+                description="Image Recipe ARN (Existing)"
+            )
 
 def main():
     # 環境変数から設定を取得
