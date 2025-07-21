@@ -245,7 +245,7 @@ class ImageBuilderStack(Stack):
             # ページネーション無しで試す
             try:
                 response = self.imagebuilder_client.list_image_recipes(owner='Self')
-                recipes = response.get('imageRecipeList', [])
+                recipes = response.get('imageRecipeSummaryList', [])
                 print(f"DEBUG: Found {len(recipes)} total recipes via list_image_recipes")
                 
                 for recipe_summary in recipes:
@@ -262,7 +262,7 @@ class ImageBuilderStack(Stack):
                 response_iterator = paginator.paginate()
                 
                 for page in response_iterator:
-                    recipes = page.get('imageRecipeList', [])
+                    recipes = page.get('imageRecipeSummaryList', [])
                     print(f"DEBUG: Found {len(recipes)} recipes in this page")
                     
                     for recipe_summary in recipes:
