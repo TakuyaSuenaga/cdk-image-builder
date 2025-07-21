@@ -62,3 +62,4 @@ jobs:
       env:
         RECIPE_VERSION: ${{ github.event.inputs.recipe_version || 'latest' }}
         GITHUB_SHA: ${{ github.sha }}
+        CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
