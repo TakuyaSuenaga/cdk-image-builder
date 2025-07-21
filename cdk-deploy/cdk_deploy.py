@@ -239,31 +239,61 @@ class ImageBuilderStack(Stack):
         見つからない場合はNoneを返す。
         """
         try:
-            # まず、フィルターなしで全てのレシピを取得してデバッグ
-            paginator = self.imagebuilder_client.get_paginator('list_image_recipes')
-            response_iterator = paginator.paginate()
+            # 直接get_image_recipeを試す方法も追加
+            expected_arn = f"arn:aws:imagebuilder:{self.region}:{self.account}:image-recipe/{name}/{version}"
+            try:
+                response = self.imagebuilder_client.get_image_recipe(imageRecipeArn=expected_arn)
+                if response and 'imageRecipe' in response:
+                    print(f"DEBUG: Found recipe via direct ARN lookup: {expected_arn}")
+                    return expected_arn
+            except self.imagebuilder_client.exceptions.ResourceNotFoundException:
+                print(f"DEBUG: Recipe not found via direct ARN lookup: {expected_arn}")
+            except Exception as direct_error:
+                print(f"DEBUG: Direct ARN lookup failed: {direct_error}")
             
-            print(f"DEBUG: Searching for recipe: {name} v{version}")
+            # list_image_recipes での検索も継続
+            print(f"DEBUG: Searching for recipe via list_image_recipes: {name} v{version}")
             
-            for page in response_iterator:
-                recipes = page.get('imageRecipeList', [])
-                print(f"DEBUG: Found {len(recipes)} total recipes")
+            # ページネーション無しで試す
+            try:
+                response = self.imagebuilder_client.list_image_recipes()
+                recipes = response.get('imageRecipeList', [])
+                print(f"DEBUG: Found {len(recipes)} total recipes via list_image_recipes")
                 
                 for recipe_summary in recipes:
                     print(f"DEBUG: Recipe found - Name: {recipe_summary.get('name')}, Version: {recipe_summary.get('version')}, Owner: {recipe_summary.get('owner')}")
                     if recipe_summary['name'] == name and recipe_summary['version'] == version:
                         print(f"DEBUG: Match found! ARN: {recipe_summary['arn']}")
                         return recipe_summary['arn']
+            except Exception as list_error:
+                print(f"DEBUG: list_image_recipes (no pagination) failed: {list_error}")
+            
+            # ページネーション有りでの検索
+            try:
+                paginator = self.imagebuilder_client.get_paginator('list_image_recipes')
+                response_iterator = paginator.paginate()
+                
+                for page in response_iterator:
+                    recipes = page.get('imageRecipeList', [])
+                    print(f"DEBUG: Found {len(recipes)} recipes in this page")
+                    
+                    for recipe_summary in recipes:
+                        print(f"DEBUG: Recipe found - Name: {recipe_summary.get('name')}, Version: {recipe_summary.get('version')}")
+                        if recipe_summary['name'] == name and recipe_summary['version'] == version:
+                            print(f"DEBUG: Match found! ARN: {recipe_summary['arn']}")
+                            return recipe_summary['arn']
+            except Exception as paginator_error:
+                print(f"DEBUG: paginated list_image_recipes failed: {paginator_error}")
             
             print(f"DEBUG: No matching recipe found for {name} v{version}")
             return None
             
         except self.imagebuilder_client.exceptions.ClientError as e:
-            print(f"Warning: An AWS client error occurred calling list_image_recipes: {e}", file=sys.stderr)
+            print(f"Warning: An AWS client error occurred: {e}", file=sys.stderr)
             return None
         except Exception as e:
-            print(f"Warning: Could not list Image Builder recipes. Error: {e}", file=sys.stderr)
-            return None            
+            print(f"Warning: Could not check for existing recipe. Error: {e}", file=sys.stderr)
+            return None
 
     def _create_components(self) -> Dict[str, Any]: # 戻り値の型を CfnComponent から Any に変更
         """コンポーネントを作成（既存の場合は参照）"""
