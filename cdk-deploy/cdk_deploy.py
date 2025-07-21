@@ -137,6 +137,7 @@ class ImageBuilderStack(Stack):
         self.components_data = components_data
         
         # boto3 Imagebuilder クライアントを初期化
+        print(self.region)
         self.imagebuilder_client = boto3.client('imagebuilder', region_name=self.region)
         
         # IAM Role for Image Builder
@@ -204,10 +205,10 @@ class ImageBuilderStack(Stack):
         try:
             # list_components API でフィルタリング
             response = self.imagebuilder_client.list_components(
-                # filters=[
-                #     {'name': 'name', 'values': [name]},
-                #     {'name': 'version', 'values': [version]}
-                # ]
+                filters=[
+                    {'name': 'name', 'values': [name]},
+                    {'name': 'version', 'values': [version]}
+                ]
             )
             
             print("componentList:")
