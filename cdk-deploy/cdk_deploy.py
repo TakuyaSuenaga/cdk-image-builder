@@ -244,7 +244,7 @@ class ImageBuilderStack(Stack):
             
             # ページネーション無しで試す
             try:
-                response = self.imagebuilder_client.list_image_recipes()
+                response = self.imagebuilder_client.list_image_recipes(owner='Self')
                 recipes = response.get('imageRecipeList', [])
                 print(f"DEBUG: Found {len(recipes)} total recipes via list_image_recipes")
                 
