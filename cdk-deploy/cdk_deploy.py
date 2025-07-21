@@ -204,10 +204,10 @@ class ImageBuilderStack(Stack):
         try:
             # list_components API でフィルタリング
             response = self.imagebuilder_client.list_components(
-                filters=[
-                    {'name': 'name', 'values': [name]},
-                    {'name': 'version', 'values': [version]}
-                ]
+                # filters=[
+                #     {'name': 'name', 'values': [name]},
+                #     {'name': 'version', 'values': [version]}
+                # ]
             )
             
             print("componentList:")
