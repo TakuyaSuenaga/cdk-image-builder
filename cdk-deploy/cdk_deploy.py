@@ -129,12 +129,13 @@ class ImageBuilderManager:
         return resolved_recipe
 
 
-def get_imagebuilder_component_details(component_arn: str, region_name: str = 'ap-northeast-1') -> Optional[Dict[str, Any]]:
+def get_imagebuilder_component_details(component_build_version_arn: str, region_name: str = 'ap-northeast-1') -> Optional[Dict[str, Any]]:
     """
     Image Builderコンポーネントの詳細を取得します。
 
     Args:
-        component_arn (str): 取得したいコンポーネントのARN。
+        component_build_version_arn (str): 取得したいコンポーネントのビルドバージョンARN。
+                                           例: arn:aws:imagebuilder:...:component/MyComponent/1.0.0/1
         region_name (str): AWSリージョン名。デフォルトは 'ap-northeast-1'。
 
     Returns:
@@ -143,32 +144,33 @@ def get_imagebuilder_component_details(component_arn: str, region_name: str = 'a
     """
     try:
         client = boto3.client('imagebuilder', region_name=region_name)
-        response = client.get_component(componentArn=component_arn)
+        response = client.get_component(componentBuildVersionArn=component_build_version_arn) # ここを修正
         
         # 'component' キーが存在すれば、その内容を返す
         if 'component' in response:
             return response['component']
         else:
-            print(f"Warning: Component with ARN {component_arn} not found in response.")
+            print(f"Warning: Component with ARN {component_build_version_arn} not found in response.")
             return None
             
     except client.exceptions.InvalidRequestException as e:
-        print(f"Error: Invalid request for component {component_arn}. {e}")
+        print(f"Error: Invalid request for component {component_build_version_arn}. {e}")
         return None
     except client.exceptions.ClientError as e:
         # 例: ComponentNotFoundException など
         if e.response['Error']['Code'] == 'ComponentNotFoundException':
-            print(f"Component with ARN {component_arn} not found.")
+            print(f"Component with ARN {component_build_version_arn} not found.")
         else:
-            print(f"An AWS client error occurred for component {component_arn}: {e}")
+            print(f"An AWS client error occurred for component {component_build_version_arn}: {e}")
         return None
     except Exception as e:
-        print(f"An unexpected error occurred for component {component_arn}: {e}")
+        print(f"An unexpected error occurred for component {component_build_version_arn}: {e}")
         return None
 
 def get_imagebuilder_recipe_details(recipe_arn: str, region_name: str = 'ap-northeast-1') -> Optional[Dict[str, Any]]:
     """
     Image Builderイメージレシピの詳細を取得します。
+    (この関数は変更なし)
 
     Args:
         recipe_arn (str): 取得したいイメージレシピのARN。
@@ -182,7 +184,6 @@ def get_imagebuilder_recipe_details(recipe_arn: str, region_name: str = 'ap-nort
         client = boto3.client('imagebuilder', region_name=region_name)
         response = client.get_image_recipe(imageRecipeArn=recipe_arn)
         
-        # 'imageRecipe' キーが存在すれば、その内容を返す
         if 'imageRecipe' in response:
             return response['imageRecipe']
         else:
@@ -193,7 +194,6 @@ def get_imagebuilder_recipe_details(recipe_arn: str, region_name: str = 'ap-nort
         print(f"Error: Invalid request for recipe {recipe_arn}. {e}")
         return None
     except client.exceptions.ClientError as e:
-        # 例: ImageRecipeNotFoundException など
         if e.response['Error']['Code'] == 'ImageRecipeNotFoundException':
             print(f"Image recipe with ARN {recipe_arn} not found.")
         else:
