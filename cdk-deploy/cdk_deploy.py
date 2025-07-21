@@ -145,7 +145,7 @@ def get_imagebuilder_component_details(component_build_version_arn: str, region_
     try:
         client = boto3.client('imagebuilder', region_name=region_name)
         response = client.get_component(componentBuildVersionArn=component_build_version_arn) # ここを修正
-        
+        print(response)
         # 'component' キーが存在すれば、その内容を返す
         if 'component' in response:
             return response['component']
@@ -183,7 +183,7 @@ def get_imagebuilder_recipe_details(recipe_arn: str, region_name: str = 'ap-nort
     try:
         client = boto3.client('imagebuilder', region_name=region_name)
         response = client.get_image_recipe(imageRecipeArn=recipe_arn)
-        
+        print(response)
         if 'imageRecipe' in response:
             return response['imageRecipe']
         else:
