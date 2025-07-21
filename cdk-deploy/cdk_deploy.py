@@ -279,29 +279,35 @@ class ImageBuilderStack(Stack):
     
     def _get_existing_component_arn(self, name: str, version: str) -> Optional[str]:
         """
-        指定された名前とバージョンの既存コンポーネントのARNを取得する。
+        指定された名前とバージョンの既存コンポーネントの最新のビルドバージョンARNを取得する。
         見つからない場合はNoneを返す。
         """
         try:
-            # list_components API でフィルタリング
-            response = self.imagebuilder_client.list_component_versions(
-                filters=[
-                    {'name': 'name', 'values': [name]},
-                    {'name': 'version', 'values': [version]}
-                ]
+            # list_component_versions を使用し、特定のコンポーネント名とバージョンでフィルタリング
+            # componentVersionArn は特定のコンポーネントバージョン (例: /1.0.0) のプレフィックス
+            component_version_prefix_arn = f"arn:aws:imagebuilder:{self.region}:{self.account}:component/{name}/{version}"
+            
+            paginator = self.imagebuilder_client.get_paginator('list_component_versions')
+            response_iterator = paginator.paginate(
+                componentVersionArn=component_version_prefix_arn, # ここでフィルタリング
+                # owner='Self' は list_component_versions にはないので注意
             )
             
-            print("componentList:")
-            print(response.get('componentList', []))
-            # ページネーションを考慮し、正確に一致するものを探す
-            for component_summary in response.get('componentList', []):
-                if component_summary['name'] == name and component_summary['version'] == version:
-                    return component_summary['arn']
+            print(f"DEBUG: Calling list_component_versions with prefix: {component_version_prefix_arn}")
+            
+            for page in response_iterator:
+                # デバッグ用の出力
+                print(f"DEBUG: list_component_versions response for '{name} v{version}': {page.get('componentVersionList', [])}")
+                
+                for component_version_summary in page.get('componentVersionList', []):
+                    # 名前とバージョンが完全に一致するか再確認（APIのフィルタリング精度に依存するため）
+                    if component_version_summary['name'] == name and component_version_summary['version'] == version:
+                        # 成功ログに表示されたようなビルドバージョンARNを返す
+                        return component_version_summary['arn'] 
             return None
             
         except Exception as e:
-            # エラー処理。権限がない場合など
-            print(f"Warning: Could not list Image Builder components. Error: {e}", file=sys.stderr)
+            print(f"Warning: Could not list Image Builder component versions. Error: {e}", file=sys.stderr)
             return None
 
     def _get_existing_recipe_arn(self, name: str, version: str) -> Optional[str]:
@@ -310,16 +316,20 @@ class ImageBuilderStack(Stack):
         見つからない場合はNoneを返す。
         """
         try:
-            # 名前でフィルタリングし、全バージョンを取得
             paginator = self.imagebuilder_client.get_paginator('list_image_recipes')
-            # 'name' フィルターは使用可能
             response_iterator = paginator.paginate(
-                filters=[{'name': 'name', 'values': [name]}]
+                filters=[
+                    {'name': 'name', 'values': [name]},
+                    {'name': 'owner', 'values': ['Self']} # ここを追加
+                ]
             )
             
+            print(f"DEBUG: Calling list_image_recipes with name: {name}, owner: Self")
+            
             for page in response_iterator:
-                print("imageRecipeList:")
-                print(page.get('imageRecipeList', []))
+                # デバッグ用の出力
+                print(f"DEBUG: list_image_recipes response for '{name}': {page.get('imageRecipeList', [])}")
+                
                 for recipe_summary in page.get('imageRecipeList', []):
                     # Pythonコード内でバージョンを比較
                     if recipe_summary['name'] == name and recipe_summary['version'] == version:
@@ -328,8 +338,8 @@ class ImageBuilderStack(Stack):
             
         except Exception as e:
             print(f"Warning: Could not list Image Builder recipes. Error: {e}", file=sys.stderr)
-            return None
-            
+            return None            
+
     def _create_components(self) -> Dict[str, Any]: # 戻り値の型を CfnComponent から Any に変更
         """コンポーネントを作成（既存の場合は参照）"""
         components = {}
