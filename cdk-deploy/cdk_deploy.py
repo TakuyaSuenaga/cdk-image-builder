@@ -284,7 +284,7 @@ class ImageBuilderStack(Stack):
         """
         try:
             # list_components API でフィルタリング
-            response = self.imagebuilder_client.list_components(
+            response = self.imagebuilder_client.list_component_versions(
                 filters=[
                     {'name': 'name', 'values': [name]},
                     {'name': 'version', 'values': [version]}
