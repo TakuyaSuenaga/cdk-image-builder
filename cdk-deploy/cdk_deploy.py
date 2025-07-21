@@ -240,16 +240,16 @@ class ImageBuilderStack(Stack):
         """
         try:
             # 直接get_image_recipeを試す方法も追加
-            expected_arn = f"arn:aws:imagebuilder:{self.region}:{self.account}:image-recipe/{name}/{version}"
-            try:
-                response = self.imagebuilder_client.get_image_recipe(imageRecipeArn=expected_arn)
-                if response and 'imageRecipe' in response:
-                    print(f"DEBUG: Found recipe via direct ARN lookup: {expected_arn}")
-                    return expected_arn
-            except self.imagebuilder_client.exceptions.ResourceNotFoundException:
-                print(f"DEBUG: Recipe not found via direct ARN lookup: {expected_arn}")
-            except Exception as direct_error:
-                print(f"DEBUG: Direct ARN lookup failed: {direct_error}")
+            # expected_arn = f"arn:aws:imagebuilder:{self.region}:{self.account}:image-recipe/{name}/{version}"
+            # try:
+            #     response = self.imagebuilder_client.get_image_recipe(imageRecipeArn=expected_arn)
+            #     if response and 'imageRecipe' in response:
+            #         print(f"DEBUG: Found recipe via direct ARN lookup: {expected_arn}")
+            #         return expected_arn
+            # except self.imagebuilder_client.exceptions.ResourceNotFoundException:
+            #     print(f"DEBUG: Recipe not found via direct ARN lookup: {expected_arn}")
+            # except Exception as direct_error:
+            #     print(f"DEBUG: Direct ARN lookup failed: {direct_error}")
             
             # list_image_recipes での検索も継続
             print(f"DEBUG: Searching for recipe via list_image_recipes: {name} v{version}")
