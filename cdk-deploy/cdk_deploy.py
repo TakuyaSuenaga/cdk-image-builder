@@ -128,82 +128,6 @@ class ImageBuilderManager:
         resolved_recipe['Components'] = resolved_components
         return resolved_recipe
 
-
-def get_imagebuilder_component_details(component_build_version_arn: str, region_name: str = 'ap-northeast-1') -> Optional[Dict[str, Any]]:
-    """
-    Image Builderコンポーネントの詳細を取得します。
-
-    Args:
-        component_build_version_arn (str): 取得したいコンポーネントのビルドバージョンARN。
-                                           例: arn:aws:imagebuilder:...:component/MyComponent/1.0.0/1
-        region_name (str): AWSリージョン名。デフォルトは 'ap-northeast-1'。
-
-    Returns:
-        Optional[Dict[str, Any]]: コンポーネントの詳細情報を含む辞書。
-                                   コンポーネントが見つからない、またはエラーの場合はNone。
-    """
-    try:
-        client = boto3.client('imagebuilder', region_name=region_name)
-        response = client.get_component(componentBuildVersionArn=component_build_version_arn) # ここを修正
-        print(response)
-        # 'component' キーが存在すれば、その内容を返す
-        if 'component' in response:
-            return response['component']
-        else:
-            print(f"Warning: Component with ARN {component_build_version_arn} not found in response.")
-            return None
-            
-    except client.exceptions.InvalidRequestException as e:
-        print(f"Error: Invalid request for component {component_build_version_arn}. {e}")
-        return None
-    except client.exceptions.ClientError as e:
-        # 例: ComponentNotFoundException など
-        if e.response['Error']['Code'] == 'ComponentNotFoundException':
-            print(f"Component with ARN {component_build_version_arn} not found.")
-        else:
-            print(f"An AWS client error occurred for component {component_build_version_arn}: {e}")
-        return None
-    except Exception as e:
-        print(f"An unexpected error occurred for component {component_build_version_arn}: {e}")
-        return None
-
-def get_imagebuilder_recipe_details(recipe_arn: str, region_name: str = 'ap-northeast-1') -> Optional[Dict[str, Any]]:
-    """
-    Image Builderイメージレシピの詳細を取得します。
-    (この関数は変更なし)
-
-    Args:
-        recipe_arn (str): 取得したいイメージレシピのARN。
-        region_name (str): AWSリージョン名。デフォルトは 'ap-northeast-1'。
-
-    Returns:
-        Optional[Dict[str, Any]]: イメージレシピの詳細情報を含む辞書。
-                                   レシピが見つからない、またはエラーの場合はNone。
-    """
-    try:
-        client = boto3.client('imagebuilder', region_name=region_name)
-        response = client.get_image_recipe(imageRecipeArn=recipe_arn)
-        print(response)
-        if 'imageRecipe' in response:
-            return response['imageRecipe']
-        else:
-            print(f"Warning: Image recipe with ARN {recipe_arn} not found in response.")
-            return None
-            
-    except client.exceptions.InvalidRequestException as e:
-        print(f"Error: Invalid request for recipe {recipe_arn}. {e}")
-        return None
-    except client.exceptions.ClientError as e:
-        if e.response['Error']['Code'] == 'ImageRecipeNotFoundException':
-            print(f"Image recipe with ARN {recipe_arn} not found.")
-        else:
-            print(f"An AWS client error occurred for recipe {recipe_arn}: {e}")
-        return None
-    except Exception as e:
-        print(f"An unexpected error occurred for recipe {recipe_arn}: {e}")
-        return None
-
-
 class ImageBuilderStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, recipe_data: Dict[str, Any], 
                  components_data: Dict[str, Dict[str, Any]], **kwargs) -> None:
@@ -211,13 +135,13 @@ class ImageBuilderStack(Stack):
         
         self.recipe_data = recipe_data
         self.components_data = components_data
-
-        get_imagebuilder_component_details("arn:aws:imagebuilder:ap-northeast-1:897729135795:component/component1/1.0.0")
-        get_imagebuilder_component_details("arn:aws:imagebuilder:ap-northeast-1:897729135795:component/component2/1.0.0")
-        get_imagebuilder_recipe_details("arn:aws:imagebuilder:ap-northeast-1:897729135795:image-recipe/image-builder-test/1.0.1")
         
+        # self.account と self.region は Stack のコンストラクタによって自動的に設定される
+        # 必要に応じて明示的に設定することも可能だが、通常は不要
+        # self.account = cdk.Aws.ACCOUNT_ID 
+        # self.region = cdk.Aws.REGION
+
         # boto3 Imagebuilder クライアントを初期化
-        print(self.region)
         self.imagebuilder_client = boto3.client('imagebuilder', region_name=self.region)
         
         # IAM Role for Image Builder
@@ -285,27 +209,26 @@ class ImageBuilderStack(Stack):
         try:
             # list_component_versions を使用し、特定のコンポーネント名とバージョンでフィルタリング
             # componentVersionArn は特定のコンポーネントバージョン (例: /1.0.0) のプレフィックス
+            # self.account は Stack の env から自動的に設定される
             component_version_prefix_arn = f"arn:aws:imagebuilder:{self.region}:{self.account}:component/{name}/{version}"
             
             paginator = self.imagebuilder_client.get_paginator('list_component_versions')
             response_iterator = paginator.paginate(
-                componentVersionArn=component_version_prefix_arn, # ここでフィルタリング
-                # owner='Self' は list_component_versions にはないので注意
+                componentVersionArn=component_version_prefix_arn
             )
             
             print(f"DEBUG: Calling list_component_versions with prefix: {component_version_prefix_arn}")
             
             for page in response_iterator:
-                # デバッグ用の出力
                 print(f"DEBUG: list_component_versions response for '{name} v{version}': {page.get('componentVersionList', [])}")
-                
                 for component_version_summary in page.get('componentVersionList', []):
-                    # 名前とバージョンが完全に一致するか再確認（APIのフィルタリング精度に依存するため）
                     if component_version_summary['name'] == name and component_version_summary['version'] == version:
-                        # 成功ログに表示されたようなビルドバージョンARNを返す
                         return component_version_summary['arn'] 
             return None
             
+        except self.imagebuilder_client.exceptions.ClientError as e:
+                print(f"Warning: An AWS client error occurred calling list_component_versions: {e}", file=sys.stderr)
+                return None
         except Exception as e:
             print(f"Warning: Could not list Image Builder component versions. Error: {e}", file=sys.stderr)
             return None
@@ -319,33 +242,33 @@ class ImageBuilderStack(Stack):
             paginator = self.imagebuilder_client.get_paginator('list_image_recipes')
             response_iterator = paginator.paginate(
                 filters=[
-                    {'name': 'name', 'values': [name]},
-                    {'name': 'owner', 'values': ['Self']} # ここを追加
+                    {'name': 'name', 'values': [name]} # 'owner' フィルターを削除
                 ]
             )
             
-            print(f"DEBUG: Calling list_image_recipes with name: {name}, owner: Self")
+            print(f"DEBUG: Calling list_image_recipes with name: {name} (no owner filter)")
             
             for page in response_iterator:
-                # デバッグ用の出力
                 print(f"DEBUG: list_image_recipes response for '{name}': {page.get('imageRecipeList', [])}")
-                
                 for recipe_summary in page.get('imageRecipeList', []):
-                    # Pythonコード内でバージョンを比較
                     if recipe_summary['name'] == name and recipe_summary['version'] == version:
                         return recipe_summary['arn']
             return None
             
+        except self.imagebuilder_client.exceptions.ClientError as e:
+                print(f"Warning: An AWS client error occurred calling list_image_recipes: {e}", file=sys.stderr)
+                return None
         except Exception as e:
             print(f"Warning: Could not list Image Builder recipes. Error: {e}", file=sys.stderr)
-            return None            
-
+            return None
+            
     def _create_components(self) -> Dict[str, Any]: # 戻り値の型を CfnComponent から Any に変更
         """コンポーネントを作成（既存の場合は参照）"""
         components = {}
         
         for component_name, component_data in self.components_data.items():
             version = component_data['Version']
+            # _get_existing_component_arn から返されるのはビルドバージョンARN
             existing_arn = self._get_existing_component_arn(component_name, version)
             
             if existing_arn:
@@ -373,45 +296,47 @@ class ImageBuilderStack(Stack):
 
         if existing_arn:
             print(f"Image Recipe '{recipe_name}' v{recipe_version}' already exists. Using ARN: {existing_arn}")
-            return ExistingImageBuilderRecipe(existing_arn) # self.recipe に直接設定
-
-        print(f"Creating new Image Recipe '{recipe_name}' v{recipe_version}'...")
-        # コンポーネント参照を構築
-        component_refs = []
-        for component_config in self.recipe_data['Components']:
-            for component_name, component_info in component_config.items():
-                if component_name in self.components:
-                    # ここで self.components[component_name] が ExistingImageBuilderComponent か CfnComponent のどちらかになる
-                    component_refs.append(
-                        imagebuilder.CfnImageRecipe.ComponentConfigurationProperty(
-                            component_arn=self.components[component_name].attr_arn
+            self.recipe = ExistingImageBuilderRecipe(existing_arn) # self.recipe に直接設定
+        else:
+            print(f"Creating new Image Recipe '{recipe_name}' v{recipe_version}'...")
+            # コンポーネント参照を構築
+            component_refs = []
+            for component_config in self.recipe_data['Components']:
+                for component_name, component_info in component_config.items():
+                    if component_name in self.components:
+                        component_refs.append(
+                            imagebuilder.CfnImageRecipe.ComponentConfigurationProperty(
+                                component_arn=self.components[component_name].attr_arn
+                            )
+                        )
+            
+            # ブロックデバイスマッピング
+            block_device_mappings = []
+            for mapping in self.recipe_data.get('BlockDeviceMappings', []):
+                ebs_config = mapping.get('Ebs', {})
+                block_device_mappings.append(
+                    imagebuilder.CfnImageRecipe.InstanceBlockDeviceMappingProperty(
+                        device_name=mapping['DeviceName'],
+                        ebs=imagebuilder.CfnImageRecipe.EbsInstanceBlockDeviceSpecificationProperty(
+                            delete_on_termination=ebs_config.get('DeleteOnTermination', True),
+                            volume_size=ebs_config.get('VolumeSize', 20),
+                            volume_type=ebs_config.get('VolumeType', 'gp3')
                         )
                     )
-        
-        # ブロックデバイスマッピング
-        block_device_mappings = []
-        for mapping in self.recipe_data.get('BlockDeviceMappings', []):
-            ebs_config = mapping.get('Ebs', {})
-            block_device_mappings.append(
-                imagebuilder.CfnImageRecipe.InstanceBlockDeviceMappingProperty(
-                    device_name=mapping['DeviceName'],
-                    ebs=imagebuilder.CfnImageRecipe.EbsInstanceBlockDeviceSpecificationProperty(
-                        delete_on_termination=ebs_config.get('DeleteOnTermination', True),
-                        volume_size=ebs_config.get('VolumeSize', 20), # 修正: VolumeSizeはint
-                        volume_type=ebs_config.get('VolumeType', 'gp3') # 修正: VolumeTypeはstr
-                    )
                 )
+            
+            self.recipe = imagebuilder.CfnImageRecipe( # self.recipe に直接設定
+                self, "ImageRecipe",
+                name=recipe_name,
+                version=recipe_version,
+                parent_image=f"arn:aws:imagebuilder:{self.region}:aws:image/{self.recipe_data['ParentImage']['Name']}/{self.recipe_data['ParentImage']['Version']}",
+                components=component_refs,
+                block_device_mappings=block_device_mappings if block_device_mappings else None
             )
         
-        return imagebuilder.CfnImageRecipe(
-            self, "ImageRecipe",
-            name=self.recipe_data['Name'],
-            version=self.recipe_data['Version'],
-            parent_image=f"arn:aws:imagebuilder:{self.region}:aws:image/{self.recipe_data['ParentImage']['Name']}/{self.recipe_data['ParentImage']['Version']}",
-            components=component_refs,
-            block_device_mappings=block_device_mappings if block_device_mappings else None
-        )
-    
+        return self.recipe
+
+
     def _create_infrastructure_config(self) -> imagebuilder.CfnInfrastructureConfiguration:
         """インフラストラクチャ設定を作成"""
         # デフォルトVPCとサブネットを取得
@@ -461,7 +386,7 @@ class ImageBuilderStack(Stack):
         return imagebuilder.CfnImagePipeline(
             self, "ImagePipeline",
             name=f"{self.recipe_data['Name']}-pipeline",
-            image_recipe_arn=self.recipe.attr_arn, # ここで self.recipe が ExistingImageBuilderRecipe か CfnImageRecipe のどちらかになる
+            image_recipe_arn=self.recipe.attr_arn,
             infrastructure_configuration_arn=self.infrastructure_config.attr_arn,
             distribution_configuration_arn=self.distribution_config.attr_arn,
             status="ENABLED"
@@ -469,16 +394,12 @@ class ImageBuilderStack(Stack):
     
     def _create_outputs(self):
         """スタックの出力を作成"""
-        # ImagePipelineArn は CfnImagePipeline を作成した場合のみ出力
         if isinstance(self.image_pipeline, imagebuilder.CfnImagePipeline):
             CfnOutput(
                 self, "ImagePipelineArn",
                 value=self.image_pipeline.attr_arn,
                 description="Image Builder Pipeline ARN"
             )
-        # else:
-        #     # ImagePipeline が既存の場合は ARN を取得する方法がないため、CfnOutput は出さないのが一般的
-        #     # もし必要なら別の方法で ARN を取得して出力
         
         if isinstance(self.recipe, imagebuilder.CfnImageRecipe):
             CfnOutput(
@@ -486,7 +407,7 @@ class ImageBuilderStack(Stack):
                 value=self.recipe.attr_arn,
                 description="Image Recipe ARN"
             )
-        else: # ExistingImageBuilderRecipe の場合は attr_arn を利用
+        else: 
              CfnOutput(
                 self, "ImageRecipeArn",
                 value=self.recipe.attr_arn, 
