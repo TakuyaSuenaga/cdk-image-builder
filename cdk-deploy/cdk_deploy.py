@@ -203,34 +203,34 @@ class ImageBuilderStack(Stack):
     
     def _get_existing_component_arn(self, name: str, version: str) -> Optional[str]:
         """
-        指定された名前とバージョンの既存コンポーネントの最新のビルドバージョンARNを取得する。
+        指定された名前とバージョンの既存コンポーネントのARNを取得する。
         見つからない場合はNoneを返す。
         """
         try:
-            # list_component_versions を使用し、特定のコンポーネント名とバージョンでフィルタリング
-            # componentVersionArn は特定のコンポーネントバージョン (例: /1.0.0) のプレフィックス
-            # self.account は Stack の env から自動的に設定される
-            component_version_prefix_arn = f"arn:aws:imagebuilder:{self.region}:{self.account}:component/{name}/{version}"
+            # まずフィルターなしで全てのコンポーネントを取得してデバッグ
+            paginator = self.imagebuilder_client.get_paginator('list_components')
+            response_iterator = paginator.paginate()
             
-            paginator = self.imagebuilder_client.get_paginator('list_component_versions')
-            response_iterator = paginator.paginate(
-                componentVersionArn=component_version_prefix_arn
-            )
-            
-            print(f"DEBUG: Calling list_component_versions with prefix: {component_version_prefix_arn}")
+            print(f"DEBUG: Searching for component: {name} v{version}")
             
             for page in response_iterator:
-                print(f"DEBUG: list_component_versions response for '{name} v{version}': {page.get('componentVersionList', [])}")
-                for component_version_summary in page.get('componentVersionList', []):
-                    if component_version_summary['name'] == name and component_version_summary['version'] == version:
-                        return component_version_summary['arn'] 
+                components = page.get('componentVersionList', [])
+                print(f"DEBUG: Found {len(components)} total components")
+                
+                for component_summary in components:
+                    print(f"DEBUG: Component found - Name: {component_summary.get('name')}, Version: {component_summary.get('version')}, Owner: {component_summary.get('owner')}")
+                    if component_summary['name'] == name and component_summary['version'] == version:
+                        print(f"DEBUG: Match found! ARN: {component_summary['arn']}")
+                        return component_summary['arn']
+            
+            print(f"DEBUG: No matching component found for {name} v{version}")
             return None
             
         except self.imagebuilder_client.exceptions.ClientError as e:
-                print(f"Warning: An AWS client error occurred calling list_component_versions: {e}", file=sys.stderr)
-                return None
+            print(f"Warning: An AWS client error occurred calling list_components: {e}", file=sys.stderr)
+            return None
         except Exception as e:
-            print(f"Warning: Could not list Image Builder component versions. Error: {e}", file=sys.stderr)
+            print(f"Warning: Could not list Image Builder components. Error: {e}", file=sys.stderr)
             return None
 
     def _get_existing_recipe_arn(self, name: str, version: str) -> Optional[str]:
@@ -239,29 +239,32 @@ class ImageBuilderStack(Stack):
         見つからない場合はNoneを返す。
         """
         try:
+            # まず、フィルターなしで全てのレシピを取得してデバッグ
             paginator = self.imagebuilder_client.get_paginator('list_image_recipes')
-            response_iterator = paginator.paginate(
-                filters=[
-                    {'name': 'name', 'values': [name]} # 'owner' フィルターを削除
-                ]
-            )
+            response_iterator = paginator.paginate()
             
-            print(f"DEBUG: Calling list_image_recipes with name: {name} (no owner filter)")
+            print(f"DEBUG: Searching for recipe: {name} v{version}")
             
             for page in response_iterator:
-                print(f"DEBUG: list_image_recipes response for '{name}': {page.get('imageRecipeList', [])}")
-                for recipe_summary in page.get('imageRecipeList', []):
+                recipes = page.get('imageRecipeList', [])
+                print(f"DEBUG: Found {len(recipes)} total recipes")
+                
+                for recipe_summary in recipes:
+                    print(f"DEBUG: Recipe found - Name: {recipe_summary.get('name')}, Version: {recipe_summary.get('version')}, Owner: {recipe_summary.get('owner')}")
                     if recipe_summary['name'] == name and recipe_summary['version'] == version:
+                        print(f"DEBUG: Match found! ARN: {recipe_summary['arn']}")
                         return recipe_summary['arn']
+            
+            print(f"DEBUG: No matching recipe found for {name} v{version}")
             return None
             
         except self.imagebuilder_client.exceptions.ClientError as e:
-                print(f"Warning: An AWS client error occurred calling list_image_recipes: {e}", file=sys.stderr)
-                return None
+            print(f"Warning: An AWS client error occurred calling list_image_recipes: {e}", file=sys.stderr)
+            return None
         except Exception as e:
             print(f"Warning: Could not list Image Builder recipes. Error: {e}", file=sys.stderr)
-            return None
-            
+            return None            
+
     def _create_components(self) -> Dict[str, Any]: # 戻り値の型を CfnComponent から Any に変更
         """コンポーネントを作成（既存の場合は参照）"""
         components = {}
