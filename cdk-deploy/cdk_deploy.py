@@ -249,10 +249,15 @@ class ImageBuilderStack(Stack):
                 print(f"DEBUG: Found {len(recipes)} total recipes via list_image_recipes")
                 
                 for recipe_summary in recipes:
-                    print(f"DEBUG: Recipe found - Name: {recipe_summary.get('name')}, Version: {recipe_summary.get('version')}, Owner: {recipe_summary.get('owner')}")
-                    if recipe_summary['name'] == name and recipe_summary['version'] == version:
-                        print(f"DEBUG: Match found! ARN: {recipe_summary['arn']}")
-                        return recipe_summary['arn']
+                    arn = recipe_summary['arn']
+                    # ARN形式: arn:aws:imagebuilder:region:account:image-recipe/name/version
+                    version_from_arn = arn.split('/')[-1]
+                    
+                    print(f"DEBUG: Recipe found - Name: {recipe_summary.get('name')}, Version: {version_from_arn}, Owner: {recipe_summary.get('owner')}")
+                    if recipe_summary['name'] == name and version_from_arn == version:
+                        print(f"DEBUG: Match found! ARN: {arn}")
+                        return arn
+
             except Exception as list_error:
                 print(f"DEBUG: list_image_recipes (no pagination) failed: {list_error}")
             
