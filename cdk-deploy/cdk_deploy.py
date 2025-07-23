@@ -271,8 +271,8 @@ class ImageBuilderStack(Stack):
                     print(f"DEBUG: Found {len(recipes)} recipes in this page")
                     
                     for recipe_summary in recipes:
-                        print(f"DEBUG: Recipe found - Name: {recipe_summary.get('name')}, Version: {recipe_summary.get('version')}")
                         version_from_arn = recipe_summary['arn'].split('/')[-1]
+                        print(f"DEBUG: Recipe found - Name: {recipe_summary.get('name')}, Version: {version_from_arn}")
                         if recipe_summary['name'] == name and version_from_arn == version:
                             print(f"DEBUG: Match found! ARN: {recipe_summary['arn']}")
                             return recipe_summary['arn']
