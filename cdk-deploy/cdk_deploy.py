@@ -272,7 +272,8 @@ class ImageBuilderStack(Stack):
                     
                     for recipe_summary in recipes:
                         print(f"DEBUG: Recipe found - Name: {recipe_summary.get('name')}, Version: {recipe_summary.get('version')}")
-                        if recipe_summary['name'] == name and recipe_summary['version'] == version:
+                        version_from_arn = recipe_summary['arn'].split('/')[-1]
+                        if recipe_summary['name'] == name and version_from_arn == version:
                             print(f"DEBUG: Match found! ARN: {recipe_summary['arn']}")
                             return recipe_summary['arn']
             except Exception as paginator_error:
