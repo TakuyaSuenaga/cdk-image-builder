@@ -1,5 +1,5 @@
 # ami-configs/ubuntu/20.04/x86_64/workflow.yml (例)
-name: Build Ubuntu 20.04 x86_64 AMI
+name: Build Ubuntu 20.04 x86_64 AMI 
 
 on:
   workflow_dispatch:
