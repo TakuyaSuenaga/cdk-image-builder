@@ -240,3 +240,57 @@ tags:
   CostCenter: "engineering"
   Project: "ami-automation"
 ```
+
+## Personal Access Token の作成手順
+
+GitHubでPATを作成:
+
+GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+"Generate new token (classic)" をクリック
+以下の権限を選択:
+
+repo (Full control of private repositories)
+workflow (Update GitHub Action workflows)
+write:packages (必要に応じて)
+
+
+
+
+リポジトリのSecretsに追加:
+
+リポジトリ → Settings → Secrets and variables → Actions
+"New repository secret" をクリック
+Name: PAT_TOKEN
+Secret: 作成したPATを貼り付け
+
+
+
+4. Fine-grained Personal Access Token を使用する場合（推奨）
+より安全なFine-grained PATを使用する場合：
+
+Fine-grained PATを作成:
+
+GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+"Generate new token" をクリック
+Resource owner: 自分のアカウントまたは組織を選択
+Repository access: 該当リポジトリを選択
+Permissions:
+
+Contents: Read and write
+Actions: Write
+Metadata: Read
+Pull requests: Read
+
+## 推奨する解決策
+最も簡単で確実な方法:
+
+Fine-grained Personal Access Token を作成（workflows権限付き）
+リポジトリのSecretsに PAT_TOKEN として保存
+ワークフローで token: ${{ secrets.PAT_TOKEN }} を使用
+
+この方法により、GitHub Actionsがワークフローファイルを作成・更新できるようになります。
+注意点
+
+GITHUB_TOKEN は workflows ディレクトリへの書き込み権限が制限されています
+Personal Access Token を使用することで、この制限を回避できます
+セキュリティ上、Fine-grained PATの使用を強く推奨します
