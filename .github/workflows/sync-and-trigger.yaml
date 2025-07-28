@@ -5,6 +5,13 @@ on:
   push:
     paths:
       - 'workflows/**/*.yaml'
+      - '.github/workflows/sync-and-trigger.yaml'
+
+permissions:
+  id-token: write
+  contents: read
+  actions: write       # GitHub Actionsの実行
+  pull-requests: read  # プルリクエストの読み取り
 
 jobs:
   detect-changes:
