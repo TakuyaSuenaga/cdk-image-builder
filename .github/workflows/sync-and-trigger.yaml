@@ -1,0 +1,157 @@
+# .github/workflows/sync-and-trigger.yaml
+name: Sync Workflows and Trigger Builds
+
+on:
+  push:
+    paths:
+      - 'workflows/**/*.yaml'
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed-configs: ${{ steps.changes.outputs.changed-configs }}
+      workflow-updated: ${{ steps.changes.outputs.workflow-updated }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed configurations
+        id: changes
+        run: |
+          echo "Detecting changed AMI configurations..."
+          
+          # 変更されたファイルを取得
+          if [ "${{ github.event_name }}" = "push" ]; then
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          else
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }})
+          fi
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # 変更された設定ディレクトリを特定
+          CHANGED_CONFIGS=""
+          WORKFLOW_UPDATED="false"
+          
+          for file in $CHANGED_FILES; do
+            if [[ $file == workflows/* ]]; then
+              # ディレクトリパスを抽出 (workflows/ubuntu/20.04/x86_64 など)
+              config_dir=$(dirname "$file")
+              if [[ $config_dir != workflows ]]; then
+                CHANGED_CONFIGS="$CHANGED_CONFIGS $config_dir"
+                
+                # ワークフローファイルが変更された場合はフラグを立てる
+                if [[ $file == */workflow.yaml ]]; then
+                  WORKFLOW_UPDATED="true"
+                fi
+              fi
+            fi
+          done
+          
+          # 重複を除去
+          CHANGED_CONFIGS=$(echo $CHANGED_CONFIGS | tr ' ' '\n' | sort -u | tr '\n' ' ')
+          
+          echo "changed-configs=$CHANGED_CONFIGS" >> $GITHUB_OUTPUT
+          echo "workflow-updated=$WORKFLOW_UPDATED" >> $GITHUB_OUTPUT
+          
+          echo "Changed configurations: $CHANGED_CONFIGS"
+          echo "Workflow updated: $WORKFLOW_UPDATED"
+
+  sync-workflows:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.workflow-updated == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync workflow files
+        run: |
+          echo "Syncing workflow files..."
+          
+          # 既存の同期済みファイルをクリア
+          find .github/workflows -name "ami-*.yaml" -delete
+          
+          # 新しいファイルをコピー
+          find workflows -name "workflow.yaml" -type f | while read -r source_file; do
+            # パスから適切なファイル名を生成
+            config_path=$(dirname "$source_file" | sed 's|workflows/||g')
+            target_name="ami-$(echo "$config_path" | sed 's|/|-|g').yaml"
+            target_path=".github/workflows/$target_name"
+            
+            echo "Copying $source_file -> $target_path"
+            cp "$source_file" "$target_path"
+            
+            # ワークフローにメタ情報を追加
+            sed -i "1i# Auto-generated from $source_file" "$target_path"
+            sed -i "2i# Config path: $config_path" "$target_path"
+          done
+
+      - name: Commit and push changes
+        run: |
+          # コミットを実行したユーザーの情報を取得
+          COMMIT_AUTHOR_NAME="${{ github.event.head_commit.author.name }}"
+          COMMIT_AUTHOR_EMAIL="${{ github.event.head_commit.author.email }}"
+          ACTOR_NAME="${{ github.actor }}"
+          
+          # フォールバック処理
+          if [ -z "$COMMIT_AUTHOR_NAME" ] || [ "$COMMIT_AUTHOR_NAME" = "null" ]; then
+            COMMIT_AUTHOR_NAME="$ACTOR_NAME"
+          fi
+          
+          if [ -z "$COMMIT_AUTHOR_EMAIL" ] || [ "$COMMIT_AUTHOR_EMAIL" = "null" ]; then
+            COMMIT_AUTHOR_EMAIL="${ACTOR_NAME}@users.noreply.github.com"
+          fi
+          
+          echo "Using commit author: $COMMIT_AUTHOR_NAME <$COMMIT_AUTHOR_EMAIL>"
+          
+          git config --local user.email "$COMMIT_AUTHOR_EMAIL"
+          git config --local user.name "$COMMIT_AUTHOR_NAME"
+
+          git add .github/workflows/ami-*.yaml
+          
+          if git diff --staged --quiet; then
+            echo "No workflow changes to commit"
+          else
+            git commit -m "Auto-sync AMI workflow files [skip ci]"
+            git push
+          fi
+
+  trigger-builds:
+    needs: [detect-changes, sync-workflows]
+    if: always() && needs.detect-changes.outputs.changed-configs != ''
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config-path: ${{ fromJson(format('[{0}]', needs.detect-changes.outputs.changed-configs)) }}
+    steps:
+      - name: Trigger AMI build
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const configPath = '${{ matrix.config-path }}';
+            const workflowName = `ami-${configPath.replace(/workflows\//, '').replace(/\//g, '-')}.yaml`;
+            
+            console.log(`Triggering workflow: ${workflowName} for config: ${configPath}`);
+            
+            try {
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: workflowName,
+                ref: context.ref,
+                inputs: {
+                  config_path: configPath,
+                  trigger_reason: 'config_changed'
+                }
+              });
+              console.log(`Successfully triggered ${workflowName}`);
+            } catch (error) {
+              console.error(`Failed to trigger ${workflowName}:`, error.message);
+            }

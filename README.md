@@ -159,3 +159,84 @@ cdk synth
 3. **監視**
    - CloudWatch メトリクスの設定
    - アラートの設定
+
+#  レシピファイル例
+
+```yaml
+# ami-configs/ubuntu/20.04/x86_64/recipe.yml
+name: ubuntu-20.04-x86_64-recipe
+description: Ubuntu 20.04 LTS x86_64 AMI recipe
+version: "1.0.0"
+
+# 親イメージ
+parentImage: "ubuntu-server-20-lts-x86"
+
+# コンポーネント
+components:
+  - name: "update-linux"
+    version: "1.0.0"
+    
+  - name: "aws-cli-version-2-linux"
+    version: "1.0.0"
+    
+  - name: "docker-ce-ubuntu"
+    version: "1.0.0"
+    
+  - name: "nodejs-16-linux"
+    version: "1.0.0"
+
+# カスタムコンポーネント
+customComponents:
+  - name: "custom-security-hardening"
+    uri: "arn:aws:imagebuilder:us-west-2:123456789012:component/security-hardening/1.0.0"
+    
+  - name: "custom-monitoring-setup"
+    uri: "arn:aws:imagebuilder:us-west-2:123456789012:component/monitoring-setup/1.0.0"
+
+# インスタンス設定
+instanceConfiguration:
+  instanceTypes:
+    - "t3.medium"
+  systemsManagerAgent: true
+  
+# 配布設定
+distributionConfiguration:
+  regions:
+    - "us-west-2"
+    - "us-east-1"
+  
+  # AMI権限
+  amiPermissions:
+    - accountId: "123456789012"
+    - accountId: "987654321098"
+
+# テスト設定
+testConfiguration:
+  instanceTypes:
+    - "t3.small"
+  timeoutMinutes: 90
+  
+# 追加設定
+additionalSettings:
+  ebsOptimized: true
+  enhancedNetworking: true
+  sriovNetSupport: "simple"
+  
+  # ユーザーデータ
+  userData: |
+    #!/bin/bash
+    echo "Starting custom AMI initialization..."
+    
+    # カスタム設定をここに追加
+    systemctl enable docker
+    usermod -aG docker ubuntu
+    
+    echo "AMI initialization completed"
+
+# タグ
+tags:
+  Environment: "production"
+  Team: "infrastructure"
+  CostCenter: "engineering"
+  Project: "ami-automation"
+```

@@ -1,0 +1,194 @@
+# ami-configs/ubuntu/20.04/x86_64/workflow.yml (例)
+name: Build Ubuntu 20.04 x86_64 AMI
+
+on:
+  workflow_dispatch:
+    inputs:
+      config_path:
+        description: 'Configuration path'
+        required: false
+        default: 'workflows/ubuntu/20.04/x86_64'
+      trigger_reason:
+        description: 'Reason for triggering'
+        required: false
+        default: 'manual'
+  push:
+    paths:
+      - 'workflows/ubuntu/20.04/x86/**'
+  # schedule:
+  #   # 毎週日曜日の午前2時 (UTC)
+  #   - cron: '0 2 * * 0'
+
+env:
+  CONFIG_PATH: ami-configs/ubuntu/20.04/x86_64
+  OS_NAME: ubuntu
+  OS_VERSION: "20.04"
+  ARCHITECTURE: x86_64
+  AWS_REGION: ap-northeast-1
+
+jobs:
+  build-ami:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '18'
+      #     cache: 'npm'
+
+      # - name: Install dependencies
+      #   run: npm ci
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r cdk-deploy/requirements.txt
+
+      - name: Install CDK
+        run: npm install -g aws-cdk
+
+      - name: Validate recipe file
+        run: |
+          echo "Validating recipe file..."
+          RECIPE_FILE="${CONFIG_PATH}/recipe/1.0.0.yaml"
+          
+          if [ ! -f "$RECIPE_FILE" ]; then
+            echo "Error: Recipe file not found at $RECIPE_FILE"
+            exit 1
+          fi
+          
+          # YAML構文チェック
+          npx js-yaml "$RECIPE_FILE" > /dev/null
+          echo "Recipe file validation passed"
+
+      - name: Deploy CDK stack and build AMI
+        # run: |
+        #   echo "Building AMI for $OS_NAME $OS_VERSION $ARCHITECTURE..."
+          
+        #   # CDKでImage Builderリソースをデプロイ
+        #   npx cdk deploy \
+        #     --require-approval never \
+        #     --context configPath="${CONFIG_PATH}" \
+        #     --context osName="${OS_NAME}" \
+        #     --context osVersion="${OS_VERSION}" \
+        #     --context architecture="${ARCHITECTURE}" \
+        #     ImageBuilderStack
+        run: |
+          cd cdk-deploy
+          cdk deploy --require-approval never
+        env:
+          RECIPE_VERSION: ${{ github.event.inputs.recipe_version || 'latest' }}
+          GITHUB_SHA: ${{ github.sha }}
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
+      # - name: Wait for AMI build completion
+      #   run: |
+      #     echo "Waiting for AMI build to complete..."
+          
+      #     # Image Builder pipeline実行を監視
+      #     PIPELINE_NAME="${OS_NAME}-${OS_VERSION}-${ARCHITECTURE}-pipeline"
+          
+      #     # 最新の実行を取得
+      #     EXECUTION_ID=$(aws imagebuilder list-image-pipeline-executions \
+      #       --image-pipeline-arn "arn:aws:imagebuilder:${AWS_REGION}:${AWS_ACCOUNT_ID}:image-pipeline/${PIPELINE_NAME}" \
+      #       --max-items 1 \
+      #       --query 'imagePipelineExecutions[0].executionId' \
+      #       --output text)
+          
+      #     if [ "$EXECUTION_ID" = "None" ] || [ -z "$EXECUTION_ID" ]; then
+      #       echo "No pipeline execution found"
+      #       exit 1
+      #     fi
+          
+      #     echo "Monitoring execution: $EXECUTION_ID"
+          
+      #     # 完了まで待機
+      #     while true; do
+      #       STATUS=$(aws imagebuilder get-image-pipeline-execution \
+      #         --execution-id "$EXECUTION_ID" \
+      #         --query 'imagePipelineExecution.status' \
+      #         --output text)
+            
+      #       echo "Current status: $STATUS"
+            
+      #       case $STATUS in
+      #         "BUILDING"|"TESTING")
+      #           echo "Build in progress..."
+      #           sleep 60
+      #           ;;
+      #         "AVAILABLE")
+      #           echo "AMI build completed successfully!"
+      #           break
+      #           ;;
+      #         "FAILED"|"CANCELLED")
+      #           echo "AMI build failed with status: $STATUS"
+      #           exit 1
+      #           ;;
+      #         *)
+      #           echo "Unknown status: $STATUS"
+      #           sleep 30
+      #           ;;
+      #       esac
+      #     done
+
+      # - name: Get AMI details
+      #   run: |
+      #     echo "Retrieving AMI details..."
+          
+      #     PIPELINE_NAME="${OS_NAME}-${OS_VERSION}-${ARCHITECTURE}-pipeline"
+          
+      #     # 最新のAMIを取得
+      #     AMI_ID=$(aws imagebuilder list-images \
+      #       --image-build-version-arn-contains "$PIPELINE_NAME" \
+      #       --query 'imageVersionList[0].outputResources.amis[0].image' \
+      #       --output text)
+          
+      #     if [ "$AMI_ID" != "None" ] && [ -n "$AMI_ID" ]; then
+      #       echo "Created AMI: $AMI_ID"
+      #       echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
+            
+      #       # AMI詳細を取得
+      #       aws ec2 describe-images --image-ids "$AMI_ID" --query 'Images[0]'
+      #     else
+      #       echo "Failed to retrieve AMI ID"
+      #       exit 1
+      #     fi
+
+      # - name: Tag AMI
+      #   if: env.AMI_ID
+      #   run: |
+      #     echo "Tagging AMI with metadata..."
+          
+      #     aws ec2 create-tags \
+      #       --resources "$AMI_ID" \
+      #       --tags \
+      #         Key=Name,Value="${OS_NAME}-${OS_VERSION}-${ARCHITECTURE}-$(date +%Y%m%d)" \
+      #         Key=OS,Value="$OS_NAME" \
+      #         Key=Version,Value="$OS_VERSION" \
+      #         Key=Architecture,Value="$ARCHITECTURE" \
+      #         Key=BuildDate,Value="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      #         Key=GitCommit,Value="${GITHUB_SHA}" \
+      #         Key=Repository,Value="${GITHUB_REPOSITORY}" \
+      #         Key=Workflow,Value="${GITHUB_WORKFLOW}"
+
+      # - name: Update outputs
+      #   if: env.AMI_ID
+      #   run: |
+      #     echo "AMI build completed successfully!"
+      #     echo "AMI ID: $AMI_ID"
+      #     echo "Configuration: ${CONFIG_PATH}"
+      #     echo "Trigger reason: ${{ github.event.inputs.trigger_reason || 'push' }}"
